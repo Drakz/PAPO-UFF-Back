@@ -18,11 +18,7 @@ connection.connect(err => {
     }
 });
 
-app.use(cors({
-    origin: 'http://localhost:3000',
-    methods: ['POST', 'PUT', 'GET', 'OPTIONS', 'HEAD'],
-    credentials: true
-  }));
+app.use(cors());
 
 app.use('/*', proxy(`localhost:3000`, {
     filter: req => !req.baseUrl.startsWith("/api"),
@@ -32,7 +28,7 @@ app.use('/*', proxy(`localhost:3000`, {
 app.use(express.json());
 
 app.post('/api/login',(req, res) =>{
-    connection.query(`SELECT nome FROM user WHERE username = "${req.body.loginName}" AND password = "${req.body.password}"`, (err, rows, fields) =>{
+    connection.query(`SELECT nome,cargo FROM user WHERE username = "${req.body.loginName}" AND password = "${req.body.password}"`, (err, rows) =>{
         if(err){
             res.status(500).send()
         }
@@ -41,9 +37,16 @@ app.post('/api/login',(req, res) =>{
         }
         const token = jwt.sign({expirationDate: Date.now() + 1000000},"a")
         res.cookie("authCookie",token, {path: '/', expires: new Date(Date.now() + 9000000), httpOnly: true});
-        console.log(rows[0].nome)
-        res.redirect(307,'/professor')
-        //res.status(200).send()
+        if(rows[0].cargo === 0){
+            console.log(rows[0].nome)
+            res.send({url: '/aluno'})
+            return;
+        }
+        else if(rows[0].cargo === 1){
+            console.log(rows[0].nome)
+            res.send({url: '/professor/perfil'})
+            return;
+        }
     });
 });
 
