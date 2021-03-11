@@ -12,7 +12,7 @@ var db_config = {
   host: "localhost",
   user: "root",
   password: "",
-  database: "tcc-database",
+  database: "tcc-database2",
   multipleStatements: true,
 };
 
@@ -313,6 +313,8 @@ app.post("/api/execute", (req, res) => {
   }
   exec(cmd, { timeout: 2000 }, (error, stdout, stderr) => {
     if (error) {
+      var errorHandle = `taskkill /f /im question${req.body.id}.exe`;
+      exec(errorHandle);
       console.log(`error: ${error.message}`);
       res.send({
         output:
