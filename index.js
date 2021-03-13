@@ -136,6 +136,7 @@ app.get("/api/questions/:id", (req, res) => {
     }
   );
 });
+
 //get current question answer
 app.get("/api/questions/answer/:question/:type", (req, res) => {
   if (parseInt(req.params.type) === 1) {
@@ -218,12 +219,19 @@ app.post("/api/student_questions", async (req, res) => {
   const question_rows = await promiseQuery(sqlTest);
   const array = await Promise.all(
     question_rows.map((question) => {
-      const questionSql = `SELECT description, type FROM question WHERE question_id = ${question.question_id}`;
+      const questionSql = `SELECT question_id, description, type FROM question WHERE question_id = ${question.question_id}`;
       return promiseQuery(questionSql);
     })
   );
   //console.log(JSON.stringify(array.flat(1)));
   res.json(array.flat(1));
+});
+
+//get student alternatives
+app.post("/api/student_alternatives", async (req, res) => {
+  const sqlTest = `SELECT alternative FROM mult_choice_question_alternatives WHERE question_id = ${req.body.questionId}`;
+  const question_rows = await promiseQuery(sqlTest);
+  res.json(question_rows.flat(1));
 });
 
 //inserting a new topic in the database
