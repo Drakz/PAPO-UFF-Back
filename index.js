@@ -87,6 +87,30 @@ app.post("/api/login", (req, res) => {
   });
 });
 
+//new student question
+app.post("/api/newStudentQuestion", (req, res) => {
+  const sqlTest = `INSERT INTO student_question VALUES (NULL, '${req.body.answer}', '${req.body.time}', '${req.body.type}', '${req.body.comp}', '${req.body.testId}', '${req.body.studentId}', '${req.body.questionId}')`;
+  connection.query(sqlTest, (err, rows) => {
+    if (err) {
+      res.status(500).send();
+    } else {
+      res.json({ url: "/login" });
+    }
+  });
+});
+
+//getting subjects
+app.post("/api/tests", (req, res) => {
+  const sql = `SELECT test_id, name FROM test WHERE prof_id = '${req.body.prof_id}'`;
+  connection.query(sql, (err, rows) => {
+    if (err) {
+      res.status(500).send();
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
 //getting subjects
 app.get("/api/subjects", (req, res) => {
   const sql = `SELECT subject_id, subject FROM subject`;
@@ -177,7 +201,7 @@ app.get("/api/questions/answer/:question/:type", (req, res) => {
 
 //insert a test
 app.post("/api/newTest", (req, res) => {
-  const sqlTest = `INSERT INTO test VALUES (NULL, "${req.body.testName}");SELECT test_id FROM test WHERE name = "${req.body.testName}"`;
+  const sqlTest = `INSERT INTO test VALUES (NULL, "${req.body.testName}", "2");SELECT test_id FROM test WHERE name = "${req.body.testName}"`;
   connection.query(sqlTest, [1, 2], (err, rows) => {
     const string = JSON.stringify(rows[1]);
     const exam = JSON.parse(string);
@@ -218,12 +242,16 @@ app.post("/api/student_questions", async (req, res) => {
   const sqlTest = `SELECT question_id FROM rel_test_questions WHERE test_id = ${req.body.testId}`;
   const question_rows = await promiseQuery(sqlTest);
   const array = await Promise.all(
-    question_rows.map((question) => {
+    question_rows.map(async (question) => {
       const questionSql = `SELECT question_id, description, type FROM question WHERE question_id = ${question.question_id}`;
-      return promiseQuery(questionSql);
+      const currentQuestion = await promiseQuery(questionSql);
+      if (currentQuestion[0].type === 3) {
+        const alternativeSql = `SELECT alternative FROM mult_choice_question_alternatives WHERE question_id = ${question.question_id}`;
+        currentQuestion[0].alt = await promiseQuery(alternativeSql);
+      }
+      return currentQuestion;
     })
   );
-  //console.log(JSON.stringify(array.flat(1)));
   res.json(array.flat(1));
 });
 

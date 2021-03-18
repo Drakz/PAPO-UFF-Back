@@ -1,5 +1,9 @@
 #include <stdio.h>
+
 int main(){
-	printf("Hello World...");
+	int a;
+	printf("Número: ");
+	scanf("%d", &a);	
+	printf("\nNúmero da variavel: %d", a);
 	return 0;
 }
