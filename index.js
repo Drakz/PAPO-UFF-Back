@@ -70,14 +70,7 @@ app.post("/api/login", (req, res) => {
     }
     if (rows[0] === undefined) {
       res.status(401).send();
-    }
-    const token = jwt.sign({ expirationDate: Date.now() + 1000000 }, "a");
-    res.cookie("authCookie", token, {
-      path: "/",
-      expires: new Date(Date.now() + 9000000),
-      httpOnly: true,
-    });
-    if (rows[0].cargo === 0) {
+    } else if (rows[0].cargo === 0) {
       res.send({ url: "/aluno" });
       return;
     } else if (rows[0].cargo === 1) {
@@ -99,7 +92,7 @@ app.post("/api/newStudentQuestion", (req, res) => {
   });
 });
 
-//getting subjects
+//getting tests
 app.post("/api/tests", (req, res) => {
   const sql = `SELECT test_id, name FROM test WHERE prof_id = '${req.body.prof_id}'`;
   connection.query(sql, (err, rows) => {
@@ -107,6 +100,59 @@ app.post("/api/tests", (req, res) => {
       res.status(500).send();
     } else {
       res.json(rows);
+    }
+  });
+});
+
+//getting a test
+app.post("/api/test", (req, res) => {
+  const sql = `SELECT name FROM test WHERE test_id = '${req.body.test_id}'`;
+  connection.query(sql, (err, rows) => {
+    if (err) {
+      res.status(500).send();
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+//getting a test
+app.post("/api/test_students", (req, res) => {
+  const sql = `SELECT DISTINCT student_id FROM student_question WHERE test_id = '${req.body.test_id}'`;
+  connection.query(sql, (err, rows) => {
+    if (err) {
+      console.log(err);
+      res.status(500).send();
+    } else {
+      res.json(rows.flat(1));
+    }
+  });
+});
+
+//getting a test
+app.post("/api/students", (req, res) => {
+  const sql = `SELECT student_id, name FROM student WHERE student_id IN (${req.body.student_ids})`;
+  connection.query(sql, (err, rows) => {
+    if (err) {
+      console.log(err);
+      res.status(500).send();
+    } else {
+      console.log(rows);
+      res.json(rows.flat(1));
+    }
+  });
+});
+
+//getting a test
+app.post("/api/students_answer", (req, res) => {
+  const sql = `SELECT student_id,answer FROM student_question WHERE student_id IN (${req.body.student_ids}) ORDER BY question_id`;
+  connection.query(sql, (err, rows) => {
+    if (err) {
+      console.log(err);
+      res.status(500).send();
+    } else {
+      console.log(rows);
+      res.json(rows.flat(1));
     }
   });
 });
@@ -252,6 +298,33 @@ app.post("/api/student_questions", async (req, res) => {
       return currentQuestion;
     })
   );
+  res.json(array.flat(1));
+});
+
+//get test for professor
+app.post("/api/professor_questions", async (req, res) => {
+  const sqlTest = `SELECT question_id FROM rel_test_questions WHERE test_id = ${req.body.test_id}`;
+  const question_rows = await promiseQuery(sqlTest);
+  const array = await Promise.all(
+    question_rows.map(async (question) => {
+      const questionSql = `SELECT question_id, description, type, title, difficulty FROM question WHERE question_id = ${question.question_id}`;
+      const currentQuestion = await promiseQuery(questionSql);
+      if (currentQuestion[0].type === 1) {
+        const answer = `SELECT answer FROM discursive_question_template WHERE question_id = ${question.question_id}`;
+        currentQuestion[0].answer = await promiseQuery(answer);
+      } else if (currentQuestion[0].type === 2) {
+        const answer = `SELECT input, output FROM programming_question_template WHERE question_id = ${question.question_id}`;
+        currentQuestion[0].answer = await promiseQuery(answer);
+      } else if (currentQuestion[0].type === 3) {
+        const alternativeSql = `SELECT alternative FROM mult_choice_question_alternatives WHERE question_id = ${question.question_id}`;
+        currentQuestion[0].alt = await promiseQuery(alternativeSql);
+        const answer = `SELECT answer FROM mult_choice_question_template WHERE question_id = ${question.question_id}`;
+        currentQuestion[0].answer = await promiseQuery(answer);
+      }
+      return currentQuestion;
+    })
+  );
+  console.log(array);
   res.json(array.flat(1));
 });
 
