@@ -145,7 +145,7 @@ app.post("/api/students", (req, res) => {
 
 //getting a test
 app.post("/api/students_answer", (req, res) => {
-  const sql = `SELECT student_id,answer FROM student_question WHERE student_id IN (${req.body.student_ids}) ORDER BY question_id`;
+  const sql = `SELECT student_id,answer FROM student_question WHERE student_id IN (${req.body.student_ids}) AND test_id = ${req.body.test_id} ORDER BY question_id`;
   connection.query(sql, (err, rows) => {
     if (err) {
       console.log(err);
@@ -285,12 +285,13 @@ function promiseQuery(query) {
 
 //get a student test
 app.post("/api/student_questions", async (req, res) => {
-  const sqlTest = `SELECT question_id FROM rel_test_questions WHERE test_id = ${req.body.testId}`;
+  const sqlTest = `SELECT question_id, compilations FROM rel_test_questions WHERE test_id = ${req.body.testId}`;
   const question_rows = await promiseQuery(sqlTest);
   const array = await Promise.all(
     question_rows.map(async (question) => {
       const questionSql = `SELECT question_id, description, type FROM question WHERE question_id = ${question.question_id}`;
       const currentQuestion = await promiseQuery(questionSql);
+      currentQuestion[0].compilations = question.compilations;
       if (currentQuestion[0].type === 3) {
         const alternativeSql = `SELECT alternative FROM mult_choice_question_alternatives WHERE question_id = ${question.question_id}`;
         currentQuestion[0].alt = await promiseQuery(alternativeSql);
@@ -392,8 +393,11 @@ app.post("/api/addQuestion", (req, res) => {
 
 //compiling student programming question
 app.post("/api/compile", (req, res) => {
-  var cmd = `gcc question${req.body.id}.c -o question${req.body.id} && echo Compilado com sucesso. O programa pode ser executado.`;
-  fs.writeFileSync(`question${req.body.id}.c`, req.body.resp);
+  var cmd = `gcc question${req.body.id}-${req.body.student_id}.c -o question${req.body.id}-${req.body.student_id} && echo Compilado com sucesso. O programa pode ser executado.`;
+  fs.writeFileSync(
+    `question${req.body.id}-${req.body.student_id}.c`,
+    req.body.resp
+  );
   exec(cmd, (error, stdout, stderr) => {
     if (error) {
       console.log(`error: ${error.message}`);
@@ -415,14 +419,20 @@ app.post("/api/compile", (req, res) => {
 
 //execute student programming question
 app.post("/api/execute", (req, res) => {
-  var cmd = `question${req.body.id}.exe`;
+  console.log(req.body.id);
+  console.log(req.body.input);
+  console.log(req.body.student_id);
+  var cmd = `question${req.body.id}-${req.body.student_id}.exe`;
   if (req.body.input) {
-    fs.writeFileSync("input.txt", req.body.input);
-    cmd = `question${req.body.id}.exe < input.txt`;
+    fs.writeFileSync(
+      `input${req.body.id}-${req.body.student_id}-${req.body.index}.txt`,
+      req.body.input
+    );
+    cmd = `question${req.body.id}-${req.body.student_id}.exe < input${req.body.id}-${req.body.student_id}-${req.body.index}.txt`;
   }
   exec(cmd, { timeout: 2000 }, (error, stdout, stderr) => {
     if (error) {
-      var errorHandle = `taskkill /f /im question${req.body.id}.exe`;
+      var errorHandle = `taskkill /f /im question${req.body.id}-${req.body.student_id}.exe`;
       exec(errorHandle);
       console.log(`error: ${error.message}`);
       res.send({
