@@ -63,18 +63,34 @@ app.use(express.json());
 
 //validating user login
 app.post("/api/login", (req, res) => {
-  const sql = `SELECT nome,cargo FROM user WHERE username = "${req.body.loginName}" AND password = "${req.body.password}"`;
+  const sql = `SELECT user_id, nome,cargo FROM user WHERE username = "${req.body.loginName}" AND password = "${req.body.password}"`;
   connection.query(sql, (err, rows) => {
     if (err) {
       res.status(500).send();
     }
     if (rows[0] === undefined) {
-      res.status(401).send();
+      console.log("entrei aqui");
+      const sqlTest = `INSERT INTO student VALUES (NULL, "${req.body.loginName}", "${req.body.password}");SELECT student_id, name FROM student WHERE name = "${req.body.loginName}"`;
+      connection.query(sqlTest, [1, 2], (err, rows) => {
+        const string = JSON.stringify(rows[1]);
+        const student = JSON.parse(string);
+        console.log(string);
+        console.log(student);
+        if (err) {
+          res.status(500).send();
+        } else {
+          res.json({
+            name: student[0].name,
+            url: "/aluno",
+            id: student[0].student_id,
+          });
+        }
+      });
     } else if (rows[0].cargo === 0) {
       res.send({ url: "/aluno" });
       return;
     } else if (rows[0].cargo === 1) {
-      res.send({ url: "/professor/perfil" });
+      res.send({ url: "/professor/perfil", user_id: rows[0].user_id });
       return;
     }
   });
@@ -176,7 +192,11 @@ app.get("/api/subject/:id/topics", (req, res) => {
     if (err) {
       res.status(500).send();
     } else {
-      res.json(rows);
+      if (rows[0].topic === undefined) {
+        res.json({ topic: "Nenhuma Questão" });
+      } else {
+        res.json(rows);
+      }
     }
   });
 });
@@ -188,7 +208,11 @@ app.get("/api/topic/:id/questions", (req, res) => {
     if (err) {
       res.status(500).send();
     } else {
-      res.json(rows);
+      if (rows[0] === undefined) {
+        res.json({ title: "Nenhuma Questão" });
+      } else {
+        res.json(rows);
+      }
     }
   });
 });
@@ -352,22 +376,23 @@ app.post("/api/subject/newTopic", (req, res) => {
 
 //inserting a new question in the database
 app.post("/api/addQuestion", (req, res) => {
+  console.log(`OI:  ${req.body.description}`);
   const sqlTest = `SELECT question_id FROM question WHERE title = "${req.body.title}" OR description = "${req.body.description}"`;
   connection.query(sqlTest, (err, rows) => {
     if (rows[0] === undefined) {
-      const sql = `INSERT INTO question VALUES (NULL, ${req.body.topic}, "${req.body.description}", "${req.body.title}", ${req.body.type}, ${req.body.difficulty}); SELECT question_id FROM question WHERE title = "${req.body.title}"`;
-      connection.query(sql, [1, 2], (err, rows) => {
+      const sql = `INSERT INTO question VALUES (NULL, '${req.body.topic}', '${req.body.description}', '${req.body.title}', '${req.body.type}', '${req.body.difficulty}'); SELECT question_id FROM question WHERE title = '${req.body.title}'`;
+      connection.query(sql, (err, rows) => {
         const string = JSON.stringify(rows[1]);
         const question = JSON.parse(string);
         if (req.body.type === 1) {
           connection.query(
-            `INSERT INTO discursive_question_template VALUES (NULL,"${req.body.answer}" , ${question[0].question_id})`
+            `INSERT INTO discursive_question_template VALUES (NULL, '${req.body.answer}' , '${question[0].question_id}')`
           );
           res.status(200).send({ id: question[0].question_id });
         } else if (req.body.type === 2) {
           req.body.inOutList.map((pairInputOutput) => {
             connection.query(
-              `INSERT INTO programming_question_template VALUES (NULL, ${question[0].question_id}, "${pairInputOutput.input}" , "${pairInputOutput.output}")`
+              `INSERT INTO programming_question_template VALUES (NULL, '${question[0].question_id}', '${pairInputOutput.input}' , '${pairInputOutput.output}')`
             );
           });
           res.status(200).send({ id: question[0].question_id });
@@ -375,11 +400,11 @@ app.post("/api/addQuestion", (req, res) => {
           req.body.multipleChoiceAnswer.map((multipleChoice, index) => {
             if (multipleChoice.checked) {
               connection.query(
-                `INSERT INTO mult_choice_question_template VALUES (NULL, "${index}" ,${question[0].question_id})`
+                `INSERT INTO mult_choice_question_template VALUES (NULL, '${index}' ,'${question[0].question_id}')`
               );
             }
             connection.query(
-              `INSERT INTO mult_choice_question_alternatives VALUES (NULL, "${multipleChoice.description}", ${question[0].question_id})`
+              `INSERT INTO mult_choice_question_alternatives VALUES (NULL, '${multipleChoice.description}', '${question[0].question_id}')`
             );
           });
           res.status(200).send({ id: question[0].question_id });
