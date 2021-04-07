@@ -69,13 +69,10 @@ app.post("/api/login", (req, res) => {
       res.status(500).send();
     }
     if (rows[0] === undefined) {
-      console.log("entrei aqui");
       const sqlTest = `INSERT INTO student VALUES (NULL, "${req.body.loginName}", "${req.body.password}");SELECT student_id, name FROM student WHERE name = "${req.body.loginName}"`;
       connection.query(sqlTest, [1, 2], (err, rows) => {
         const string = JSON.stringify(rows[1]);
         const student = JSON.parse(string);
-        console.log(string);
-        console.log(student);
         if (err) {
           res.status(500).send();
         } else {
@@ -90,6 +87,7 @@ app.post("/api/login", (req, res) => {
       res.send({ url: "/aluno" });
       return;
     } else if (rows[0].cargo === 1) {
+      console.log(rows[0].user_id);
       res.send({ url: "/professor/perfil", user_id: rows[0].user_id });
       return;
     }
@@ -98,7 +96,7 @@ app.post("/api/login", (req, res) => {
 
 //new student question
 app.post("/api/newStudentQuestion", (req, res) => {
-  const sqlTest = `INSERT INTO student_question VALUES (NULL, '${req.body.answer}', '${req.body.time}', '${req.body.type}', '${req.body.comp}', '${req.body.testId}', '${req.body.studentId}', '${req.body.questionId}')`;
+  const sqlTest = `INSERT INTO student_question VALUES (NULL, '${req.body.answer}', '${req.body.time}', '${req.body.type}', '${req.body.comp}', '${req.body.testId}', '${req.body.studentId}', '${req.body.questionId}', '${req.body.totalValue}', '0', 'false', 'Placeholder')`;
   connection.query(sqlTest, (err, rows) => {
     if (err) {
       res.status(500).send();
@@ -137,7 +135,6 @@ app.post("/api/test_students", (req, res) => {
   const sql = `SELECT DISTINCT student_id FROM student_question WHERE test_id = '${req.body.test_id}'`;
   connection.query(sql, (err, rows) => {
     if (err) {
-      console.log(err);
       res.status(500).send();
     } else {
       res.json(rows.flat(1));
@@ -150,10 +147,8 @@ app.post("/api/students", (req, res) => {
   const sql = `SELECT student_id, name FROM student WHERE student_id IN (${req.body.student_ids})`;
   connection.query(sql, (err, rows) => {
     if (err) {
-      console.log(err);
       res.status(500).send();
     } else {
-      console.log(rows);
       res.json(rows.flat(1));
     }
   });
@@ -161,13 +156,11 @@ app.post("/api/students", (req, res) => {
 
 //getting a test
 app.post("/api/students_answer", (req, res) => {
-  const sql = `SELECT student_id,answer FROM student_question WHERE student_id IN (${req.body.student_ids}) AND test_id = ${req.body.test_id} ORDER BY question_id`;
+  const sql = `SELECT student_question_id, student_id, answer, comp, type, total_value, checked, value, question_id, feedback, time FROM student_question WHERE student_id IN (${req.body.student_ids}) AND test_id = ${req.body.test_id} ORDER BY question_id`;
   connection.query(sql, (err, rows) => {
     if (err) {
-      console.log(err);
       res.status(500).send();
     } else {
-      console.log(rows);
       res.json(rows.flat(1));
     }
   });
@@ -271,7 +264,7 @@ app.get("/api/questions/answer/:question/:type", (req, res) => {
 
 //insert a test
 app.post("/api/newTest", (req, res) => {
-  const sqlTest = `INSERT INTO test VALUES (NULL, "${req.body.testName}", "2");SELECT test_id FROM test WHERE name = "${req.body.testName}"`;
+  const sqlTest = `INSERT INTO test VALUES (NULL, "${req.body.testName}", "${req.body.prof_id}");SELECT test_id FROM test WHERE name = "${req.body.testName}"`;
   connection.query(sqlTest, [1, 2], (err, rows) => {
     const string = JSON.stringify(rows[1]);
     const exam = JSON.parse(string);
@@ -295,6 +288,29 @@ app.post("/api/newTestRel", (req, res) => {
   });
 });
 
+//create test relation
+app.post("/api/updateQuestionScore", (req, res) => {
+  const sqlTest = `UPDATE student_question SET value = '${req.body.newValue}', checked = '1', feedback = '${req.body.feedback}' WHERE student_question_id = '${req.body.question_id}';`;
+  connection.query(sqlTest, (err, rows) => {
+    if (err) {
+      res.status(500).send();
+    } else {
+      res.status(200).send();
+    }
+  });
+});
+
+app.post("/api/updateQuestionNewScore", (req, res) => {
+  const sqlTest = `UPDATE student_question SET value = '${req.body.newValue}', feedback = '${req.body.feedback}' WHERE student_question_id = '${req.body.question_id}';`;
+  connection.query(sqlTest, (err, rows) => {
+    if (err) {
+      res.status(500).send();
+    } else {
+      res.status(200).send();
+    }
+  });
+});
+
 function promiseQuery(query) {
   return new Promise((resolve, reject) => {
     connection.query(query, (err, rows) => {
@@ -309,13 +325,14 @@ function promiseQuery(query) {
 
 //get a student test
 app.post("/api/student_questions", async (req, res) => {
-  const sqlTest = `SELECT question_id, compilations FROM rel_test_questions WHERE test_id = ${req.body.testId}`;
+  const sqlTest = `SELECT question_id, compilations, value FROM rel_test_questions WHERE test_id = ${req.body.testId}`;
   const question_rows = await promiseQuery(sqlTest);
   const array = await Promise.all(
     question_rows.map(async (question) => {
       const questionSql = `SELECT question_id, description, type FROM question WHERE question_id = ${question.question_id}`;
       const currentQuestion = await promiseQuery(questionSql);
       currentQuestion[0].compilations = question.compilations;
+      currentQuestion[0].value = question.value;
       if (currentQuestion[0].type === 3) {
         const alternativeSql = `SELECT alternative FROM mult_choice_question_alternatives WHERE question_id = ${question.question_id}`;
         currentQuestion[0].alt = await promiseQuery(alternativeSql);
@@ -328,12 +345,13 @@ app.post("/api/student_questions", async (req, res) => {
 
 //get test for professor
 app.post("/api/professor_questions", async (req, res) => {
-  const sqlTest = `SELECT question_id FROM rel_test_questions WHERE test_id = ${req.body.test_id}`;
+  const sqlTest = `SELECT question_id, compilations FROM rel_test_questions WHERE test_id = ${req.body.test_id}`;
   const question_rows = await promiseQuery(sqlTest);
   const array = await Promise.all(
     question_rows.map(async (question) => {
       const questionSql = `SELECT question_id, description, type, title, difficulty FROM question WHERE question_id = ${question.question_id}`;
       const currentQuestion = await promiseQuery(questionSql);
+      currentQuestion[0].compilations = question.compilations;
       if (currentQuestion[0].type === 1) {
         const answer = `SELECT answer FROM discursive_question_template WHERE question_id = ${question.question_id}`;
         currentQuestion[0].answer = await promiseQuery(answer);
@@ -349,7 +367,6 @@ app.post("/api/professor_questions", async (req, res) => {
       return currentQuestion;
     })
   );
-  console.log(array);
   res.json(array.flat(1));
 });
 
@@ -376,9 +393,11 @@ app.post("/api/subject/newTopic", (req, res) => {
 
 //inserting a new question in the database
 app.post("/api/addQuestion", (req, res) => {
-  console.log(`OI:  ${req.body.description}`);
-  const sqlTest = `SELECT question_id FROM question WHERE title = "${req.body.title}" OR description = "${req.body.description}"`;
+  const sqlTest = `SELECT question_id FROM question WHERE title = '${req.body.title}' OR description = '${req.body.description}'`;
   connection.query(sqlTest, (err, rows) => {
+    if (rows === undefined) {
+      res.status(500).send();
+    }
     if (rows[0] === undefined) {
       const sql = `INSERT INTO question VALUES (NULL, '${req.body.topic}', '${req.body.description}', '${req.body.title}', '${req.body.type}', '${req.body.difficulty}'); SELECT question_id FROM question WHERE title = '${req.body.title}'`;
       connection.query(sql, (err, rows) => {
@@ -444,9 +463,6 @@ app.post("/api/compile", (req, res) => {
 
 //execute student programming question
 app.post("/api/execute", (req, res) => {
-  console.log(req.body.id);
-  console.log(req.body.input);
-  console.log(req.body.student_id);
   var cmd = `question${req.body.id}-${req.body.student_id}.exe`;
   if (req.body.input) {
     fs.writeFileSync(
@@ -468,7 +484,9 @@ app.post("/api/execute", (req, res) => {
       console.log(`stderr: ${stderr}`);
       res.send({ output: stderr });
     } else if (stdout) {
-      console.log(`stdout: ${stdout}`);
+      console.log(
+        `stdout [Student ID: ${req.body.student_id}] [Input: ${req.body.input}] [Question ID: ${req.body.id}]: ${stdout}`
+      );
       res.send({ output: stdout });
     }
   });
